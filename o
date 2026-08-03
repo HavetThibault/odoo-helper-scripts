@@ -1,0 +1,251 @@
+#!/bin/bash
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/git_utils.sh"
+source "${SCRIPT_DIR}/odoo_utils.sh"
+source "${SCRIPT_DIR}/config.sh"
+
+
+previous_config_file="previous_config.txt"
+
+
+parse_args() {
+    local i=0
+    local all_args=($*)
+    local args_len=${#all_args[*]}
+    # local args_len_less_one=$((args_len-1))
+    local args=(${all_args[*]:0:((args_len-2))})
+    local is_config_file=${all_args[*]: -2:1}
+    local -n cleansed_args=${all_args[*]: -1}
+    while [[ $i -lt $((args_len-2)) ]]; do
+        if [[ ${args[i]} == '-i' || ${args[i]} == '-di' || ${args[i]} == '-u' || ${args[i]} == '-r' ]]; then
+            if [[ $is_config_file -eq 1 ]]; then
+                echo "No action expected in the config file, found ${args[i]}" 1>&2
+                exit 1
+            fi
+            cleansed_args[action]=${args[i]}
+        elif [[ ${args[i]} == '-m' ]]; then
+            if [[ ${args[((i+1))]} =~ ^-.*$ || ${args[((i+1))]} == '' ]]; then
+                echo "Module expected after -m" 1>&2
+                exit 1
+            else
+                cleansed_args[action_modules]=${args[((i+1))]}
+                i=$((i+1))
+            fi
+        elif [[ ${args[i]} == '-d' ]]; then
+            if [[ ${args[((i+1))]} =~ ^-.*$ || ${args[((i+1))]} == '' ]]; then
+                echo "Database expected after -d" 1>&2
+                exit 1
+            fi
+            cleansed_args[database]=${args[((i+1))]}
+            i=$((i+1))
+        elif [[ ${args[i]} == '-nd' || ${args[i]} == '-dw' || ${args[i]} == '-ndw' ]]; then
+            cleansed_args[debug]=${args[i]}
+        elif [[ ${args[i]} == '-t' ]]; then
+            if [[ ${args[((i+1))]} == '' ]]; then
+                echo "No arg found after ${args[i]}" 1>&2
+                exit 1
+            fi
+            cleansed_args[test]=${args[((i+1))]}
+            i=$((i+1))
+        elif [[ ${args[i]} == '--log-level' ]]; then
+            if [[ ${args[((i+1))]} == '' ]]; then
+                echo "No arg found after ${args[i]}" 1>&2
+                exit 1
+            fi
+            cleansed_args[log_level]=${args[((i+1))]}
+            i=$((i+1))
+        elif [[ $i -eq 0 && ${args[i]} == 'shell' ]]; then
+            cleansed_args[shell]="1"
+        elif [[ ${args[i]} == '--no-demo' ]]; then
+            cleansed_args[demo]="0"
+        elif [[ ${args[i]} == '--login' ]]; then
+            if [[ ${args[((i+1))]} == '' ]]; then
+                echo "No arg found after ${args[i]}" 1>&2
+                exit 1
+            fi
+            cleansed_args[login]=${args[((i+1))]}
+        elif [[ ${args[i]} == '--password' ]]; then
+            if [[ ${args[((i+1))]} == '' ]]; then
+                echo "No arg found after ${args[i]}" 1>&2
+                exit 1
+            fi
+            cleansed_args[password]=${args[((i+1))]}
+        elif [[ ${args[i]} == '-nc' ]]; then
+            cleansed_args[no_chrome]="1"
+        else
+            if [[ i -ne 0 || ! ${args[i]} =~ ^.*\.txt$ ]]; then
+                echo "Stfu is this arg ??? --->  ${args[i]}  <---" 1>&2
+                exit 1
+            fi
+        fi
+        i=$((i+1))
+    done
+}
+
+for arg in $*; do
+    if [[ $arg == '--help' ]]; then
+        cat $o_help_file
+        exit 0
+    fi
+done
+
+root_relativ_path=$(get_root_relative_path_2)
+
+if [[ $1 == 'requirements' ]]; then
+    python_env -m pip install --force-reinstall -r $root_relativ_path/$community_folder/requirements.txt
+elif [[ $1 == 'pip' && $2 == 'install' ]]; then
+    if [[ $# -ne 3 ]]; then
+        echo "Only 1 arg is allowed after 'pip install' and it should be the python dependency!" 1>&2
+        exit 1
+    fi
+    python_env -m pip install --force-reinstall $3
+elif [[ $1 == 'tblame' ]]; then
+    if [[ $# -ne 2 ]]; then
+        echo "Only 1 arg is allowed after 'tblame' and it should be the path of the file!" 1>&2
+        exit 1
+    fi
+    # TODO: accept absolute path
+    filePath=$2
+    community_match="^$community_folder/.*"'$'
+    enterprise_match="^$enterprise_folder/.*"'$'
+    upgrade_match="^$upgrade_folder/.*"'$'
+    if [[ $filePath =~ $community_match ]]; then
+        cd $root_relativ_path/$community_folder
+        filePath=${filePath#*'/'}
+    elif [[ $filePath =~ $enterprise_match ]]; then
+        cd $root_relativ_path/$enterprise_folder
+        filePath=${filePath#*'/'}
+    elif [[ $filePath =~ $upgrade_match ]]; then
+        cd $root_relativ_path/$upgrade_folder
+        filePath=${filePath#*'/'}
+    fi
+    tig blame $filePath
+else
+    cd $root_relativ_path
+    if [[ $# -eq 0 ]]; then
+        if [[ ! -f $previous_config_file ]]; then
+            echo Arguments please! Do you really expect it to magically work without any argument? 1>&2
+            exit 1
+        fi
+        config_file=$(cat $previous_config_file)
+    else
+        if [[ ! $1 =~ ^.*\.txt$ ]]; then
+            if [[ ! -f $previous_config_file ]]; then
+                echo The first argument must be the config file 1>&2
+                exit 1
+            else
+                config_file=$(cat $previous_config_file)
+            fi
+        else
+            config_file=$1
+        fi
+    fi
+    [[ -e "$previous_config_file" ]] && rm $previous_config_file
+    echo $config_file > $previous_config_file
+
+    args=""
+    for config_line in $(cat $config_file); do
+        args="$args $config_line"
+    done
+
+    declare -A parsed_args
+    parse_args $args 1 parsed_args
+    cli_args=$*
+    parse_args $cli_args 0 parsed_args
+
+    if [[ ${parsed_args[database]} == '' ]]; then
+        echo The database is missing 1>&2
+        exit 1
+    fi
+
+    if [[ ${parsed_args[debug]} == '' ]]; then
+        parsed_args[debug]='-nd'
+    fi
+
+    if [[ ${parsed_args[debug]} != '-nd' ]]; then
+        pip_list=$(python_env -m pip list)
+        # If grep do not find anything it returns 1
+        set +e
+        debugpy_module=$(echo "$pip_list" | grep -F debugpy)
+        set -e
+        if [[ ${#debugpy_module} -eq 0 ]]; then
+            python_env -m pip install debugpy
+        fi
+        command="-m debugpy --listen 0.0.0.0:5699"
+        if [[ ${parsed_args[debug]} == '-dw' ]]; then
+            command="$command --wait-for-client"
+        fi
+    fi
+
+    if [[ ${parsed_args[action]} == '-di' ]]; then
+        db_exists=$(psql -c "SELECT 'EXISTS' as exists;" ${parsed_args[database]} | head -n 1)
+        db_exists_pattern="^ exists.*$"
+        if [[ $db_exists =~ $db_exists_pattern ]]; then
+            dropdb ${parsed_args[database]}
+        fi
+        parsed_args[action]=-i
+    elif [[ ${parsed_args[action]} == '' || ${parsed_args[action]} == '-r' || ${parsed_args[action]} == '-u' ]]; then
+        db_exists=$(psql -c "SELECT 'EXISTS' as exists;" ${parsed_args[database]} | head -n 1)
+        db_exists_pattern="^ exists.*$"
+        if [[ ! $db_exists =~ $db_exists_pattern ]]; then
+            parsed_args[action]='-i'
+        fi
+    fi
+
+    command="$command $start_file"
+
+    if [[ ${parsed_args[shell]} == "1" ]]; then
+        command="$command shell"
+    fi
+
+    command="$command --addons-path ./addons/,../$enterprise_folder/ -d ${parsed_args[database]}"
+
+    if [[ ${parsed_args[action]} != '' && ${parsed_args[action]} != '-r' ]]; then
+        if [[ ${parsed_args[action_modules]} == '' ]]; then
+            echo The modules are missing 1>&2
+            exit 1
+        fi
+        command="$command ${parsed_args[action]} ${parsed_args[action_modules]}"
+    fi
+
+    if [[ ${parsed_args[test]} != '' ]]; then
+        command="$command --test-tags ${parsed_args[test]} --stop-after-init"
+    fi
+
+    if [[ ${parsed_args[log_level]} == '' ]]; then
+        parsed_args[log_level]=warn
+    fi
+    command="$command --log-level ${parsed_args[log_level]}"
+
+    if [[ ${parsed_args[demo]} == '' ]]; then
+        command="$command --with-demo"
+    fi
+
+    if [[ ${parsed_args[no_chrome]} == '1' ]]; then
+        command="$command -nc"
+    fi
+
+    if [[ ${parsed_args[login]} != '' ]]; then
+        command="$command --login ${parsed_args[login]}"
+    else
+        command="$command --login $default_login"
+    fi
+
+    if [[ ${parsed_args[password]} != '' ]]; then
+        command="$command --password ${parsed_args[password]}"
+    else
+        command="$command --password $default_password"
+    fi
+
+    cd $community_folder
+    export PYTHONPATH="$(pwd):${PYTHONPATH:-}"
+    python_path=$(get_python_path)
+    echo "$python_path $command"
+    if [[ ${parsed_args[debug]} == '-dw' ]]; then
+        echo WAITING FOR DEBUGGER ATTACHMENT
+    fi
+    $python_path $command
+fi
