@@ -1,1 +1,0 @@
-# odoo-helper-scripts
