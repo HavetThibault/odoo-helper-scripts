@@ -128,7 +128,7 @@ else
     if [[ ${parsed_args[debug]} == '' ]]; then
         parsed_args[debug]='-nd'
     fi
-    
+
     if [[ ${parsed_args[debug]} != '-nd' ]]; then
         pip_list=$(python_env -m pip list)
         # If grep do not find anything it returns 1

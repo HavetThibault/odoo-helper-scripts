@@ -13,28 +13,9 @@ LEVELS = ('INFO', 'WARNING', 'ERROR', 'CRITICAL')
 LEVEL_BY_NAME = {name: getattr(logging, name, logging.INFO) for name in LEVELS}
 IS_TESTING = '--test-tags' in sys.argv
 
-"""
-    PATCH PURPOSE
-    -------------
 
-    - If `--log-level` is specified, it will display all the logs which level is higher or equal to the specified minimum log level, plus the important logs
-    - If `--log-level` is not specified, it will keep pooping all the logs
 
-    For each newly created logger:
-        If the logger level (the level threshold below which logs aren't displayed) is higher than `logging.INFO`, then the level of the logger is set back to the `logging.INFO`
-        Then we attach a `PleaseFilterImportantLogsDearGodooFilter` to this logger, and this filter will only keep the logs with a higher or equal level to the original logger level (stored in `min_log_level`), OR the "important logs"
-
-    Advanced note: if the filter `min_log_level` is 0, this filter will iterate through the loggers hierarchy until it finds a logger with a non zero `min_log_level` filter and use this threshold instead (see `PleaseFilterImportantLogsDearGodooFilter.filter`).
-
-    CONFIG
-    ------
-
-    The config of this script is managed through the variables below this note.
-    - If you want it to display more logs/hide logs, feel free to modify `DISPLAYED_RECORD_NAMES` and/or `DISPLAYED_RECORD_NAMES_COND`.
-    - Setting `SHOW_ALL_LOGS_AGAIN` will disable/enable this "logging extension"
-
-    WARNING: this patch may break depending on the logging library version (standard python library only tested in 3.12)
-"""
+""" CONFIG VARIABLES """
 
 SHOW_ALL_LOGS_AGAIN = False
 
@@ -51,6 +32,9 @@ def tests_ended_callback():
 
 def web_server_ready_callback():
     subprocess.run('notify-send -t 1300 -i face-smile -u normal "Web Server Ready" "READY"', shell=True, executable="/bin/bash")
+
+""" END OF CONFIG VARIABLES """
+
 
 
 if not SHOW_ALL_LOGS_AGAIN:
