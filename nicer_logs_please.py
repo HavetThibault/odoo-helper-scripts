@@ -28,10 +28,10 @@ DISPLAYED_RECORD_NAMES_COND = {
 }
 
 def tests_ended_callback():
-    subprocess.run('notify-send -t 1300 -i face-smile -u normal "The Tests Ended" "DONE"', shell=True, executable="/bin/bash")
+    subprocess.run('notify-send --transient --icon info --urgency normal "The Tests Ended" "DONE"', shell=True, executable="/bin/bash")
 
 def web_server_ready_callback():
-    subprocess.run('notify-send -t 1300 -i face-smile -u normal "Web Server Ready" "READY"', shell=True, executable="/bin/bash")
+    subprocess.run('notify-send --transient --icon info --urgency normal "Web Server Ready" "READY"', shell=True, executable="/bin/bash")
 
 """ END OF CONFIG VARIABLES """
 

@@ -1,0 +1,47 @@
+DISCLAIMER:
+-----------
+
+This script assumes you are using a python virtual environment, and the following files architecture:
+    root_folder
+      |--- odoo
+      |      |--- .venv/bin/python
+      |
+      |--- enterprise
+
+MAIN COMMANDS:
+--------------
+
+Here are the availables commands:
+- o requirements: force reinstall the requirements.txt file
+- o pip install <module>: install the python module in the virtual environment
+- o <custom_config_file.txt> [action] [config_args...]: runs Odoo
+
+
+RUNNING ODOO:
+-------------
+
+When running Odoo (third command), the script will use a config file which contains the following lines:
+    Required:
+        - Database: -d <database>
+        - Modules: -m <modules_list> (separated by comma without any space as usual)
+    Optionnal:
+        - Debug mode:
+            - -ndw : debug mode not waiting for someone to listen to the debug port to before running Odoo
+            - -nd : no debug
+            - -dw : debug mode that will wait for someone to listen to the debug port before running Odoo
+        - Tests:
+            - -t <tests_list> (separated by comma without any space as usual)
+
+Note: the config file must be placed in the root_folder, and must ends with ".txt" !
+
+All those arguments can also be specified in the command line after the config file name, they will override the config file args !
+The [action] can be one of those:
+    - Install: -i
+    - Update: -u
+    - Run: -r (won't specify anything else in the command running Odoo)
+    - Delete DB then install: -di
+
+PS:
+- If the specified action is either '-r' or '-u' and that no DB exists, the script will try to install the modules (action '-i')
+- Once Odoo has been run once, it will keep in memory the last config file used (so that it's not necessary to specify it in the next command)
+- For the debugger, you'll probably need to add/configure an extension. I'm on Codium, and I use "DebugPyAttacher.debugpy-attacher" (see https://open-vsx.org/vscode/item?itemName=DebugPyAttacher.debugpy-attacher)

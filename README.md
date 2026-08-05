@@ -31,6 +31,4 @@ The end of tests/server ready callables (notification) are managed in the `Pleas
 
 
 ## o
-This script offers some nice tools to launch/test Odoo.
-
-His guide and an option --help will come in a future commit.
+This script offers some nice tools to launch/test Odoo, see `o_help.txt` file, or run `o --help`.
