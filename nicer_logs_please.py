@@ -33,6 +33,10 @@ def tests_ended_callback():
 def web_server_ready_callback():
     subprocess.run('notify-send --transient --icon info --urgency normal "Web Server Ready" "READY"', shell=True, executable="/bin/bash")
 
+make_cursor_go_up_char = '\033[A'
+carriage_return_char = '\r'
+
+
 """ END OF CONFIG VARIABLES """
 
 
@@ -65,7 +69,7 @@ if not SHOW_ALL_LOGS_AGAIN:
 
                 msg_len = len(msg)
                 if self.was_last_message_module_loading:
-                    msg = f'\033[A\r{msg}'.ljust(self.previous_msg_len + 4, " ")
+                    msg = f'{make_cursor_go_up_char}{carriage_return_char}{msg}'.ljust(self.previous_msg_len + 4, " ")
                 if module_loading:
                     self.previous_msg_len = msg_len
                 self.was_last_message_module_loading = module_loading

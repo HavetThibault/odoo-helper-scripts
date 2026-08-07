@@ -1,3 +1,4 @@
+
 DISCLAIMER:
 -----------
 
@@ -45,3 +46,4 @@ PS:
 - If the specified action is either '-r' or '-u' and that no DB exists, the script will try to install the modules (action '-i')
 - Once Odoo has been run once, it will keep in memory the last config file used (so that it's not necessary to specify it in the next command)
 - For the debugger, you'll probably need to add/configure an extension. I'm on Codium, and I use "DebugPyAttacher.debugpy-attacher" (see https://open-vsx.org/vscode/item?itemName=DebugPyAttacher.debugpy-attacher)
+
