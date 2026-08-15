@@ -7,17 +7,24 @@ source "${SCRIPT_DIR}/config.sh"
 
 
 cdroot() {
-    local root_rel_path=$(get_root_relative_path_2 || exit $?)
+    local root_rel_path=$(get_root_relative_path)
+    if [[ $root_rel_path == '' ]]; then
+        exit 1
+    fi
     cd $root_rel_path
 }
 
 cdodoo() {
-    local root_rel_path=$(get_root_relative_path_2 || exit $?)
+    local root_rel_path=$(get_root_relative_path)
+    if [[ $root_rel_path == '' ]]; then
+        exit 1
+    fi
     cd $root_rel_path/$community_folder
 }
 
-get_root_relative_path_2() {
+get_root_relative_path() {
     local folder=$(pwd)
+    local starting_dir=$folder
     local before_len=-1
     local path='.'
     while [[ ${#folder} -gt 0 && ${#folder} -ne $before_len ]]; do
@@ -33,7 +40,7 @@ get_root_relative_path_2() {
             path=../$path
         fi
     done
-    echo "Neither $working_dir, neither the parent folder is a odoo repository" 1>&2
+    echo "Neither $starting_dir, neither the parent folders are an odoo repository" 1>&2
     exit 1
 }
 
@@ -46,30 +53,36 @@ is_odoo_repository() {
     fi
 }
 
+PREVIOUS_VIRTUAL_ENV=''
 python_env() {
-    local python_path=$(get_python_path)
+    if [[ $venv_python_relativ_path != '' ]]; then
+        if [[ $VIRTUAL_ENV == '' || $VIRTUAL_ENV != $PREVIOUS_VIRTUAL_ENV ]]; then
+            local relative_path=$(get_root_relative_path)
+            if [[ $relative_path == '' ]]; then
+                exit 1
+            fi
+            cd $relative_path
+            local venv_dir="$(pwd)"
+            cd -
+            python_path="$venv_dir"/"$community_folder"/"$venv_python_relativ_path"
+            # source "$venv_dir"/"$community_folder"/"$venv_activate_relativ_path"
+            PREVIOUS_VIRTUAL_ENV="$VIRTUAL_ENV"
+        else
+            python_path="$PREVIOUS_VIRTUAL_ENV"
+        fi
+    elif [[ $python_path == '' ]]; then
+        echo "Wrong config: Expected either 'venv_python_relativ_path' or 'python_path' variable to be set" 1>&2
+        exit 1
+    fi
     $python_path "$@"
 }
 
-get_python_path() {
-    if [[ $venv_folder_relative_path != '' ]]; then
-        local relative_path=$(get_root_relative_path_2)
-        local exit_status=$?
-        if [[ $exit_status -ne 0 ]]; then
-            exit $exit_status
-        fi
-        echo ${relative_path}/${venv_folder_relative_path}/python
-    elif [[ $python_path != '' ]]; then
-        echo $python_path
-    else
-        echo "Wrong config: Expected either 'venv_folder_relative_path' or 'python_path' variable to be set" 1>&2
+get_all_modules() {
+    local root_rel_path=$(get_root_relative_path)
+    if [[ $root_rel_path == '' ]]; then
         exit 1
     fi
-}
-
-get_all_modules() {
-    local root_rel_path=$(get_root_relative_path_2 || exit $?)
-    cd $root_rel_path/$community_folder/addons
+    cd "$root_rel_path"/"$community_folder"/addons
     local -n all_of_the_modules=$1
     local module_cnt=0 #${#all_of_the_modules[@]}
     for element in $(ls); do

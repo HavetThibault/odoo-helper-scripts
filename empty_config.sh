@@ -1,11 +1,13 @@
+# Name of the folders
 community_folder="community"
 enterprise_folder="enterprise"
-script_folder="script_dir"
-start_file="$script_folder/nicer_logs_please.py"
-o_help_file="$script_folder/o_help.txt"
-# Either set the 'python_path' or the 'venv_folder_relative_path'
-python_path=""
-# Relative to the root_folder
-venv_folder_relative_path=".venv/bin"
+# IMPORTANT: Either set the 'python_path' or the 'venv_python_relativ_path' & 'venv_activate_relativ_path'
+python_path="~/python/path"
+# Relative to the 'root_folder' (see readme), no '/' at the end !
+venv_python_relativ_path="./.venv/bin/python3"
+venv_activate_relativ_path="./.venv/bin/activate"
+# Credential the program will use to login through Google Chrome
 default_login=""
 default_password=""
+# Set to "0" if you don't like this bloat
+enable_chrome_managmenent="1"

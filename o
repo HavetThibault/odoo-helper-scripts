@@ -2,14 +2,16 @@
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/git_utils.sh"
-source "${SCRIPT_DIR}/odoo_utils.sh"
-source "${SCRIPT_DIR}/config.sh"
+O_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${O_SCRIPT_DIR}/git_utils.sh"
+source "${O_SCRIPT_DIR}/odoo_utils.sh"
+source "${O_SCRIPT_DIR}/config.sh"
 
-
+start_file="$O_SCRIPT_DIR/nicer_logs_please.py"
+o_help_file="$O_SCRIPT_DIR/o_help.txt"
 previous_config_file="previous_config.txt"
 
+to_append_command=""
 
 parse_args() {
     local i=0
@@ -59,8 +61,6 @@ parse_args() {
             i=$((i+1))
         elif [[ $i -eq 0 && ${args[i]} == 'shell' ]]; then
             cleansed_args[shell]="1"
-        elif [[ ${args[i]} == '--no-demo' ]]; then
-            cleansed_args[demo]="0"
         elif [[ ${args[i]} == '--login' ]]; then
             if [[ ${args[((i+1))]} == '' ]]; then
                 echo "No arg found after ${args[i]}" 1>&2
@@ -76,9 +76,12 @@ parse_args() {
         elif [[ ${args[i]} == '-nc' ]]; then
             cleansed_args[no_chrome]="1"
         else
-            if [[ i -ne 0 || ! ${args[i]} =~ ^.*\.txt$ ]]; then
-                echo "Stfu is this arg ??? --->  ${args[i]}  <---" 1>&2
-                exit 1
+            if [[ ! ${args[i]} =~ ^.*\.txt$ ]]; then
+                to_append_command="$to_append_command ${args[i]}"
+                if [[ ${args[((i+1))]} != '' && ! ${args[((i+1))]} =~ ^-.*$ ]]; then
+                    to_append_command="$to_append_command ${args[((i+1))]}"
+                    i=$((i+1))
+                fi        
             fi
         fi
         i=$((i+1))
@@ -92,7 +95,10 @@ for arg in $*; do
     fi
 done
 
-root_relativ_path=$(get_root_relative_path_2)
+root_relativ_path=$(get_root_relative_path)
+if [[ $root_relativ_path == '' ]]; then
+    exit 1
+fi
 
 if [[ $1 == 'requirements' ]]; then
     python_env -m pip install --force-reinstall -r $root_relativ_path/$community_folder/requirements.txt
@@ -220,10 +226,6 @@ else
     fi
     command="$command --log-level ${parsed_args[log_level]}"
 
-    if [[ ${parsed_args[demo]} == '' ]]; then
-        command="$command --with-demo"
-    fi
-
     if [[ ${parsed_args[no_chrome]} == '1' ]]; then
         command="$command -nc"
     fi
@@ -240,12 +242,15 @@ else
         command="$command --password $default_password"
     fi
 
+    if [[ $enable_chrome_managmenent == '0' ]]; then
+        command="$command -nc"
+    fi
+
     cd $community_folder
     export PYTHONPATH="$(pwd):${PYTHONPATH:-}"
-    python_path=$(get_python_path)
-    echo "$python_path $command"
+    echo "python $command $to_append_command"
     if [[ ${parsed_args[debug]} == '-dw' ]]; then
         echo WAITING FOR DEBUGGER ATTACHMENT
     fi
-    $python_path $command
+    python_env $command
 fi

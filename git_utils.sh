@@ -1,7 +1,7 @@
 #!/bin/bash
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/number_utils.sh"
+GIT_UTILS_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${GIT_UTILS_SCRIPT_DIR}/number_utils.sh"
 
 origin_version_prefix=[0-9]{2}\.0
 saas_version_prefix=saas-[0-9]{2}\.[0-9]
@@ -23,21 +23,75 @@ get_branch_source() {
 }
 
 is_source_branch() {
-    if [[ $branch =~ ^${origin_version_prefix}$ || $branch =~ ^$saas_version_prefix$ || $branch = master ]]; then
+    local branch=$1
+    if [[ $branch =~ ^${origin_version_prefix}$ || $branch =~ ^$saas_version_prefix$ || $branch == "master" ]]; then
         echo 1
     else
         echo 0
     fi
 }
 
-# TODO: refiler la liste des branches possibles
-# Pour pouvoir par exemple lister les branches pas uniquement dans le répertoire actuel
+get_active_branch() {
+    local community=$1
+    local enterprise=$2
+    if [[ $community == $enterprise ]]; then
+        echo $community
+    fi
+    local is_community_src=$(is_source_branch $community)
+    local is_enterprise_src=$(is_source_branch $enterprise)
+    if [[ ($is_community_src -eq 1 && $is_enterprise_src -eq 1) ]]; then
+        echo "Folder activ branches ($1 and $2) are inconsistent! Please fix that manually!" 1>&2
+        return
+    elif [[ ($is_community_src -eq 0 && $is_enterprise_src -eq 0) ]]; then
+        echo "2 Folder activ branches ($1 and $2) are inconsistent! Please fix that manually!" 1>&2
+        return
+    elif [[ $is_community_src -eq 0 ]]; then
+        echo $community
+    fi
+    echo $enterprise
+}
+
 select_branch() {
+    local root_rel_path=$(get_root_relative_path)
+    if [[ $root_rel_path == '' ]]; then
+        exit 1
+    fi
+    cd $root_rel_path/odoo
+
+    declare -A availabe_src_branches
+    declare -A availabe_branches
+    local community_branch=""
+    local enterprise_branch=""
+    for branch in $(git branch | sed 's/* /-/g'); do
+        if [[ $branch =~ ^-.*$ ]]; then
+            community_branch=${branch:1}
+            continue
+        fi
+
+        if [[ $(is_source_branch $branch) -eq 0 ]]; then
+            availabe_branches[$branch]=true
+        fi
+    done
+    cd ../enterprise
+    for branch in $(git branch | sed 's/* /-/g'); do
+        if [[ $branch =~ ^-.*$ ]]; then
+            enterprise_branch=${branch:1}
+            continue
+        fi
+
+        if [[ $(is_source_branch $branch) -eq 0 ]]; then
+            availabe_branches[$branch]=true
+        fi
+    done
+
+    local active_branch=$(get_active_branch $community_branch $enterprise_branch)
     local i=1
-    echo "~~~ Please pick a branch"
-    declare -a branchs
-    for branch in $(git branch | sed 's/*/ /g'); do
-        echo "$i) $branch"
+    echo " Please pick a branch"
+    for branch in ${!availabe_branches[@]}; do
+        if [[ $branch == $active_branch ]]; then
+            continue
+        fi
+        echo "    [$i] $branch"
         branchs[$i]=$branch
         i=$((i+1))
     done

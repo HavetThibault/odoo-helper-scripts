@@ -8,6 +8,14 @@ This script assumes you are using a python virtual environment, and the followin
       |--- enterprise_folder
       |--- [upgrade_folder] (optionnal)
 
+SETUP:
+------
+Please fill the 'empty_config.sh' file and rename it to 'config.sh'.
+
+You will also need selenium:
+> sudo apt-get install selenium
+
+
 MAIN COMMANDS:
 --------------
 
@@ -32,8 +40,6 @@ When running Odoo (third command), the script will use a config file which conta
             - '-dw' : debug mode that will wait for someone to listen to the debug port before running Odoo
         - Tests:
             - '-t' <tests_list> (separated by comma without any space as usual)
-        - Demo Data:
-            - '--no-demo' : the odoo commands add the demo data by default, this starts odoo without the '--with-demo'
 
 Note: the config file must be placed in the 'root_folder', and must ends with ".txt" !
 
@@ -43,6 +49,8 @@ The [action] can be one of those:
     - Update: '-u'
     - Run: '-r' (won't specify anything else in the command running Odoo)
     - Delete DB then install: '-di'
+
+In addition to those arguments, all other Odoo arguments will be passed (and can be set in the config file as well).
 
 PS:
 - If the specified action is either '-r' or '-u' and that no DB exists, the script will try to install the modules (action '-i')

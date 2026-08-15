@@ -8,6 +8,7 @@ SHOW_NOTIFICATION_ON_TEST_END = True
 OPEN_CHROME_ON_WEB_SERVER_READY = True
 SHOW_NOTIFICATION_ON_WEB_SERVER_READY = True
 PROGRESS_BAR_LENGTH = 50
+ODOO_URL_START='http://localhost:8069/'
 
 DISPLAYED_RECORD_NAMES = ('odoo.service.server', 'odoo.tests.stats', 'odoo.tests.result', 'odoo.service.server.ThreadedServer')
 DISPLAYED_RECORD_NAMES_COND = {
@@ -17,18 +18,21 @@ DISPLAYED_RECORD_NAMES_COND = {
 
 cursor_go_up_char = '\033[A'
 carriage_return_char = '\r'
+CHROME_DEBUG_PORT=11212
 
 """ END OF CONFIG VARIABLES """
-
 
 import logging
 import subprocess
 import sys
+import os
 import threading
 from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
-
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support.wait import WebDriverWait
+import requests
 
 origin_logger_get_logger = logging.getLogger
 origin_logger_set_level = logging.Logger.setLevel
@@ -40,55 +44,116 @@ LEVEL_BY_NAME = {name: getattr(logging, name, logging.INFO) for name in LEVELS}
 IS_TESTING = '--test-tags' in sys.argv
 IS_SHELL = 'shell' in sys.argv
 
-
+OPEN_CHROME_WAIT = object()
 LOGIN = ''
 PASSWORD = ''
 SHOW_CHROME = True
 i = 0
 while i < len(sys.argv):
-    if sys.argv[i] == '--login':
-        if len(sys.argv) <= i + 1 or sys.argv[i + 1].startswith('-'):
-            raise Exception('Expected login after --login')
-        sys.argv.pop(i)
-        LOGIN = sys.argv.pop(i)
-        i -= 1
-    elif sys.argv[i] == '--password':
-        if len(sys.argv) <= i + 1 or sys.argv[i + 1].startswith('-'):
-            raise Exception('Expected login after --password')
-        sys.argv.pop(i)
-        PASSWORD = sys.argv.pop(i)
-        i -= 1
-    elif sys.argv[i] == '-nc':
-        SHOW_CHROME = False
-        sys.argv.pop(i)
-        i -= 1
+    match sys.argv[i]:
+        case '--login':
+            if len(sys.argv) <= i + 1 or sys.argv[i + 1].startswith('-'):
+                raise Exception('Expected login after --login')
+            sys.argv.pop(i)
+            LOGIN = sys.argv.pop(i)
+            i -= 1
+        case '--password':
+            if len(sys.argv) <= i + 1 or sys.argv[i + 1].startswith('-'):
+                raise Exception('Expected login after --password')
+            sys.argv.pop(i)
+            PASSWORD = sys.argv.pop(i)
+            i -= 1
+        case '-nc':
+            SHOW_CHROME = False
+            sys.argv.pop(i)
+            i -= 1
     i += 1
 
+# The ID of the tab that has the url of Odoo
+is_chrome_opened = False
+# Whether there is a Chrome running, but that no tab has the url of Odoo
+new_window = False
+if not IS_SHELL and not IS_TESTING and OPEN_CHROME_ON_WEB_SERVER_READY and SHOW_CHROME:
+    try:
+        response = requests.get(f"http://localhost:{CHROME_DEBUG_PORT}/json")
+        is_chrome_opened = True
+    except requests.exceptions.RequestException:
+        profile_dir = 'Profile 1'
+        user_data_dir = os.path.expanduser("~/.config/google-chrome-remote")
+        subprocess.Popen(["google-chrome", f"--remote-debugging-port={CHROME_DEBUG_PORT}", f"--user-data-dir={user_data_dir}",
+            f"--profile-directory={profile_dir}", "--log-level=3"],
+            start_new_session=True)
+
+    chrome_options = Options()
+    chrome_options.add_argument(f"--remote-debugging-port={CHROME_DEBUG_PORT}")  # Enable debugging
+    chrome_options.add_experimental_option("debuggerAddress", f"127.0.0.1:{CHROME_DEBUG_PORT}")  # Connect to existing Chrome
+
+    # Blocks until connected to Chrome !
+    driver = webdriver.Chrome(
+        options=chrome_options
+    )
+    driver.minimize_window()
 
 def _open_browser():
-    # You have to set the login=admin in the query string to get the focus on the form, otherwise you'll get the following error:
-    # selenium.common.exceptions.ElementNotInteractableException: Message: element not interactable
-    if LOGIN == '' or PASSWORD == '':
-        raise Exception('Expected a login and a password passed through the arguments!')
-    driver.get(f"http://localhost:8069/web/login?login={LOGIN}")
-    password = driver.find_element(By.ID, "password")
-    password.send_keys(PASSWORD)
-    password.send_keys(Keys.RETURN)
+    try:
+        response = requests.get(f"http://localhost:{CHROME_DEBUG_PORT}/json")
+    except requests.exceptions.RequestException:
+        print('~~WARNING~~ Chrome didn\'t show because it was closed while loading Odoo (limitation of this script)!')
+        return
+    target_window_handle = None
+    for tab in response.json():
+        # Some tabs contain script that are working in the background, we need to filter the "real" tabs
+        if tab.get('type', '') == 'page':
+            if not tab.get('url', '').startswith(ODOO_URL_START):
+                continue
+            target_window_handle = tab.get('id')
+            break
 
-if not IS_TESTING and not IS_SHELL and OPEN_CHROME_ON_WEB_SERVER_READY and SHOW_CHROME:
-    # webbrowser didn't work
-    # os.system('chrome') didn't work
-    # subprocess.Popen(['google-chrome', url], ...) didn't work
-    # So I used Selenium from a thread
-    driver = webdriver.Chrome()
-    thread = threading.Thread(target=_open_browser, daemon=True)
+    if target_window_handle:
+        driver.switch_to.window(target_window_handle)
+        driver.refresh()
+    else:
+        driver.get(ODOO_URL_START)
+    if driver.current_url.startswith(f'{ODOO_URL_START}web/login'):
+        if LOGIN == '' or PASSWORD == '':
+            raise Exception('Expected a login and a password passed through the arguments!')
+
+        login = driver.find_element(By.ID, "login")
+        wait = WebDriverWait(driver, timeout=4)
+        wait.until(lambda _ : login.is_displayed())
+        # Refresh login: get the displayed element!
+        login = driver.find_element(By.ID, "login")
+        # Clicking on the window shows it anyway
+        driver.maximize_window()
+        login.click()
+        # The moment the login is clicked, Chrome sometimes fill automatically the fields
+        wait.until(lambda _ : login.is_displayed())
+        login = driver.find_element(By.ID, "login")
+        if login.text != LOGIN:
+            login.clear()
+            login.send_keys(LOGIN)
+        password = driver.find_element(By.ID, "password")
+        wait.until(lambda _ : password.is_displayed())
+        password = driver.find_element(By.ID, "password")
+        password.click()
+        password.clear()
+        password.send_keys(PASSWORD)
+        password.send_keys(Keys.RETURN)
+    else:
+        driver.maximize_window()
+
+thread = threading.Thread(target=_open_browser)
 
 def web_server_ready_callback():
     if not IS_SHELL and OPEN_CHROME_ON_WEB_SERVER_READY and SHOW_CHROME:
+        # webbrowser didn't work
+        # os.system('chrome') didn't work
+        # subprocess.Popen(['google-chrome', url], ...) didn't work
+        # So I used Selenium from a thread
         thread.start()
     elif SHOW_NOTIFICATION_ON_WEB_SERVER_READY:
-        subprocess.Popen('notify-send --transient --icon info --urgency normal "Web Server Ready" "READY"',
-            shell=True, executable="/bin/bash")
+        subprocess.run('notify-send --transient --icon info --urgency normal "Web Server Ready" "READY"',
+            shell=True, executable="/bin/bash", check=True)
 
 def tests_ended_callback(odoo_test_result):
     if not SHOW_NOTIFICATION_ON_TEST_END:
@@ -97,8 +162,8 @@ def tests_ended_callback(odoo_test_result):
     failures = odoo_test_result.failures_count
     testRun = odoo_test_result.testsRun
     test_header = 'PASSED' if errors + failures == 0 else 'FAILED'
-    subprocess.Popen(f'notify-send --transient --icon info --urgency normal "The Tests {test_header}" "{failures} failed, {errors} error(s) of {testRun} tests"',
-        shell=True, executable="/bin/bash")
+    subprocess.run(f'notify-send --transient --icon info --urgency normal "The Tests {test_header}" "{failures} failed, {errors} error(s) of {testRun} tests"',
+        shell=True, executable="/bin/bash", check=True)
 
 
 if not SHOW_ALL_LOGS_AGAIN:
