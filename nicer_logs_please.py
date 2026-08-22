@@ -32,6 +32,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.wait import WebDriverWait
+from selenium.common.exceptions import WebDriverException
 import requests
 
 origin_logger_get_logger = logging.getLogger
@@ -92,7 +93,8 @@ if not IS_SHELL and not IS_TESTING and OPEN_CHROME_ON_WEB_SERVER_READY and SHOW_
     driver = webdriver.Chrome(
         options=chrome_options
     )
-    driver.minimize_window()
+    if not is_chrome_opened:
+        driver.minimize_window()
 
 def _open_browser():
     try:
@@ -124,7 +126,11 @@ def _open_browser():
         # Refresh login: get the displayed element!
         login = driver.find_element(By.ID, "login")
         # Clicking on the window shows it anyway
-        driver.maximize_window()
+        try:
+            driver.maximize_window()
+        except WebDriverException as e:
+            print(f"~~WARNING~~ Chrome didn't show up most likely because the screen was locked!\nError message:\n{e.message}")
+            return
         login.click()
         # The moment the login is clicked, Chrome sometimes fill automatically the fields
         wait.until(lambda _ : login.is_displayed())
@@ -271,5 +277,6 @@ if not SHOW_ALL_LOGS_AGAIN:
 
 import odoo.cli
 
+print(f'Running odoo with args: {sys.argv}')
 if __name__ == "__main__":
     odoo.cli.main()

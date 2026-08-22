@@ -1,29 +1,15 @@
 
-DISCLAIMER:
------------
-
-This script assumes you are using a python virtual environment, and the following files architecture:
-    root_folder
-      |--- community_folder
-      |--- enterprise_folder
-      |--- [upgrade_folder] (optionnal)
-
-SETUP:
-------
-Please fill the 'empty_config.sh' file and rename it to 'config.sh'.
-
-You will also need selenium:
-> sudo apt-get install selenium
-
 
 MAIN COMMANDS:
 --------------
 
-Here are the availables commands:
-- o requirements: force reinstall the requirements.txt file
-- o pip install <module>: install the python module in the virtual environment
+Here are the available commands:
+- o requirements [add_requirement_file]: force reinstall the requirements.txt file. Also accepts an additionnal argument containing the absolute or relative path to another requirement file. Usefull for installing more dependencies without having to write them manually in the Odoo requirements.txt file.
+- o pip <arguments>: uses the specified python path to run a command, can be handfull for installing things using pip for example
 - o tblame <relativeFilePath>: run 'tig blame' on the file (need tig to be installed on the system)
 - o <custom_config_file.txt> [action] [config_args...]: runs Odoo
+- o shell <custom_config_file.txt> [config_args...]
+- o upg [init | template | prep | upg | test] <custom_config_file.txt> -ur <upgrade_file.txt>: runs one of the upgrade step
 
 
 RUNNING ODOO:
@@ -38,12 +24,17 @@ When running Odoo (third command), the script will use a config file which conta
             - '-ndw' : debug mode not waiting for someone to listen to the debug port to before running Odoo
             - '-nd' : no debug
             - '-dw' : debug mode that will wait for someone to listen to the debug port before running Odoo
+            -> Please install 'debugpy': 'o pip install debugpy'
         - Tests:
             - '-t' <tests_list> (separated by comma without any space as usual)
 
 Note: the config file must be placed in the 'root_folder', and must ends with ".txt" !
 
-All those arguments can also be specified in the command line after the config file name, they will override the config file args !
+
+CLI ARGUMENTS:
+--------------
+
+All the arguments of the config file can also be specified in the command line after the config file name, they will override the config file args !
 The [action] can be one of those:
     - Install: '-i'
     - Update: '-u'
@@ -57,3 +48,23 @@ PS:
 - Once Odoo has been run once, it will keep in memory the last config file used (so that it's not necessary to specify it in the next command)
 - For the debugger, you'll probably need to add/configure an extension. I'm on Codium, and I use "DebugPyAttacher.debugpy-attacher" (see https://open-vsx.org/vscode/item?itemName=DebugPyAttacher.debugpy-attacher)
 
+
+UPGRADE:
+--------
+
+- o upg init 'args': switch to the source branch and initialize the database (drops it if it already exists)
+- o upg template 'args': create a template from the db created by the 'upg init'
+- o upg prep 'args': use the template DB and run the upgrade test preparations
+- o upg upg 'args': switch to the destination branch and upgrade the template DB
+- o upg test 'args': run the upgrade tests
+
+WHERE 'args' are '<custom_config_file.txt> <additionnal args>'
+With <additionnal args> being a list of arguments:
+- -ur <upgrade_file.txt>: specify the upgrade file containing 3 entries, here is an example:
+    src_branch=19.0
+    dst_branch=master-wrong-computation-accrued-days-thha
+    template_db=upg_accrual
+
+    With 'src_branch' the source branch (the version we are starting from), 'dst_branch' the version we are upgrading to, and 'template_db' the name of the template database
+- --log-level (optionnal): odoo log level argument
+- debug mode (-nd | -dw | -ndw) (optionnal)

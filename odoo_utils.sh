@@ -53,22 +53,23 @@ is_odoo_repository() {
     fi
 }
 
-PREVIOUS_VIRTUAL_ENV=''
+PREVIOUS_PYTHON_VENV_PATH=''
+PREVIOUS_PYTHON_RUN_DIRECTORY=''
 python_env() {
-    if [[ $venv_python_relativ_path != '' ]]; then
-        if [[ $VIRTUAL_ENV == '' || $VIRTUAL_ENV != $PREVIOUS_VIRTUAL_ENV ]]; then
+    if [[ $python_path == '' && $venv_python_relativ_path != '' ]]; then
+        local directory=$(pwd)
+        if [[ $directory != $PREVIOUS_PYTHON_RUN_DIRECTORY ]]; then
             local relative_path=$(get_root_relative_path)
             if [[ $relative_path == '' ]]; then
                 exit 1
             fi
             cd $relative_path
             local venv_dir="$(pwd)"
-            cd -
+            cd $directory
             python_path="$venv_dir"/"$community_folder"/"$venv_python_relativ_path"
-            # source "$venv_dir"/"$community_folder"/"$venv_activate_relativ_path"
-            PREVIOUS_VIRTUAL_ENV="$VIRTUAL_ENV"
+            PREVIOUS_PYTHON_VENV_PATH="$python_path"
         else
-            python_path="$PREVIOUS_VIRTUAL_ENV"
+            python_path="$PREVIOUS_PYTHON_VENV_PATH"
         fi
     elif [[ $python_path == '' ]]; then
         echo "Wrong config: Expected either 'venv_python_relativ_path' or 'python_path' variable to be set" 1>&2

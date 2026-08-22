@@ -36,6 +36,7 @@ get_active_branch() {
     local enterprise=$2
     if [[ $community == $enterprise ]]; then
         echo $community
+        return
     fi
     local is_community_src=$(is_source_branch $community)
     local is_enterprise_src=$(is_source_branch $enterprise)
@@ -47,6 +48,7 @@ get_active_branch() {
         return
     elif [[ $is_community_src -eq 0 ]]; then
         echo $community
+        return
     fi
     echo $enterprise
 }
@@ -58,7 +60,6 @@ select_branch() {
     fi
     cd $root_rel_path/odoo
 
-    declare -A availabe_src_branches
     declare -A availabe_branches
     local community_branch=""
     local enterprise_branch=""

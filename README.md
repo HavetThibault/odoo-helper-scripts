@@ -22,3 +22,18 @@ The config of this script is managed through some variables at the top of the sc
 ## o
 This script offers some nice tools to launch/test Odoo, see `o_help.txt` file, or run `o --help` for more infos.
 
+### DISCLAIMER
+
+This script assumes you are using the following files architecture:
+```
+    root_folder
+      |--- community_folder
+      |--- enterprise_folder
+      |--- [upgrade_folder] (optionnal)
+```
+
+### SETUP
+Please fill the 'empty_config.sh' file and rename it to 'config.sh'.
+
+You will also need selenium:
+> sudo apt-get install selenium
