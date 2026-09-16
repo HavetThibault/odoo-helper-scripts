@@ -23,16 +23,11 @@ CHROME_DEBUG_PORT=11212
 """ END OF CONFIG VARIABLES """
 
 import logging
+import os
 import subprocess
 import sys
-import os
 import threading
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.support.wait import WebDriverWait
-from selenium.common.exceptions import WebDriverException
+
 import requests
 
 origin_logger_get_logger = logging.getLogger
@@ -70,6 +65,14 @@ while i < len(sys.argv):
             i -= 1
     i += 1
 
+if SHOW_CHROME:
+    from selenium import webdriver
+    from selenium.common.exceptions import WebDriverException
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.common.keys import Keys
+    from selenium.webdriver.support.wait import WebDriverWait
+
 # The ID of the tab that has the url of Odoo
 is_chrome_opened = False
 # Whether there is a Chrome running, but that no tab has the url of Odoo
@@ -78,6 +81,8 @@ if not IS_SHELL and not IS_TESTING and OPEN_CHROME_ON_WEB_SERVER_READY and SHOW_
     try:
         response = requests.get(f"http://localhost:{CHROME_DEBUG_PORT}/json")
         is_chrome_opened = True
+        # selenium.common.exceptions.NoSuchWindowException: Message: no such window: target window already closed
+        # si on ferme la fenetre entre temps
     except requests.exceptions.RequestException:
         profile_dir = 'Profile 1'
         user_data_dir = os.path.expanduser("~/.config/google-chrome-remote")
@@ -277,6 +282,8 @@ if not SHOW_ALL_LOGS_AGAIN:
 
 import odoo.cli
 
-print(f'Running odoo with args: {sys.argv}')
 if __name__ == "__main__":
-    odoo.cli.main()
+    # from freezegun import freeze_time
+
+    # with freeze_time('2027-12-31'):
+        odoo.cli.main()

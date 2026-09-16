@@ -7,17 +7,21 @@ GSWA_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${GSWA_SCRIPT_DIR}/git_utils.sh"
 source "${GSWA_SCRIPT_DIR}/odoo_utils.sh"
 source "${GSWA_SCRIPT_DIR}/config.sh"
+source "${GSWA_SCRIPT_DIR}/../display_utils.sh"
+# source "../display_utils.sh"
+# source "./git_utils.sh"
+# source "./odoo_utils.sh"
+# source "./config.sh"
 
 if [[ $# -eq 0 ]]; then
     branch=$(select_get_branch)
 else
     branch=$1
 fi
-echo $branch
 branch_source=$(get_branch_source $branch)
 
 if [[ $branch_source != $branch ]]; then
-    cdodoo
+    cdcommunity
     exit_status=$?
     if [[ $exit_status -ne 0 ]]; then
         exit $exit_status
@@ -27,13 +31,13 @@ if [[ $branch_source != $branch ]]; then
     enterprise_exists=$(local_branch_exists $branch)
     if [[ $community_exists -eq 0 && $enterprise_exists -eq 0 ]]; then
         echo Could not find the branch locally, searching in remote 'dev' ...
-        enterprise_exists=$(remote_branch_exists $branch)
+        enterprise_exists=$(remote_branch_exists dev $branch)
         if [[ $enterprise_exists -eq 1 ]]; then
             git fetch dev $branch
         fi
 
         cd ../$community_folder
-        community_exists=$(remote_branch_exists $branch)
+        community_exists=$(remote_branch_exists dev $branch)
         if [[ $community_exists -eq 1 ]]; then
             git fetch dev $branch
         fi
@@ -45,7 +49,7 @@ if [[ $branch_source != $branch ]]; then
     fi
 
     cd ../$community_folder
-    echo -e "\n~~ Community"
+    header "Community"
     if [[ $community_exists -eq 1 ]]; then
         git switch $branch
     else
@@ -53,21 +57,21 @@ if [[ $branch_source != $branch ]]; then
     fi
 
     cd ../$enterprise_folder
-    echo -e "\n~~ Enterprise"
+    header "Enterprise"
     if [[ $enterprise_exists -eq 1 ]]; then
         git switch $branch
     else
         fetch_if_necessary_switch $branch_source
     fi
 else
-    cdodoo
+    cdcommunity
     exit_status=$?
     if [[ $exit_status -ne 0 ]]; then
         exit $exit_status
     fi
-    echo -e "\n~~ Community"
+    header "Community"
     fetch_if_necessary_switch $branch
     cd ../$enterprise_folder
-    echo -e "\n~~ Enterprise"
+    header "Enterprise"
     fetch_if_necessary_switch $branch
 fi

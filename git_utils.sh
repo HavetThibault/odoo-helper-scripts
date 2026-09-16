@@ -17,8 +17,8 @@ get_branch_source() {
     elif [[ $branch =~ ^master.*$ ]]; then
         echo master
     else
-        echo "Could not find the source repository of the branch $branch" 1>&2
-        exit 1
+        echo "'"$branch"' is not a valid odoo branch name!" 1>&2
+        return 1
     fi
 }
 
@@ -147,8 +147,9 @@ local_branch_exists() {
 }
 
 remote_branch_exists() {
-    local branch=$1
-    local remote_ls=$(git ls-remote dev ${branch})
+    local remote=$1
+    local branch=$2
+    local remote_ls=$(git ls-remote "$remote" "$branch")
     if [[ ${#remote_ls} -eq 0 ]]; then
         echo 0
     else
@@ -175,9 +176,48 @@ fetch_if_necessary_switch() {
     if [[ $(local_branch_exists $branch) -eq 0 ]]; then
         git fetch $remote $branch
         if [[ $(get_branch_source $branch) = $branch ]]; then
-            git switch -c $branch --track $remote/$branch
+            git switch -c $branch --track "$remote/$branch"
             return 0
         fi
     fi
     git switch $branch
+}
+
+fetch_src_if_necessary() {
+    local branch=$1
+    local folder=$2
+    local branch_src=$(get_branch_source "$branch")
+    if [[ $(local_branch_exists "$branch_src") -eq 0 ]]; then
+        local has_changes=$(changes_exist)
+        if [[ $has_changes -eq 1 ]]; then
+            local today=$(date "+%Y-%m-%d==%H:%M:%S")
+            local current_branch=$(get_current_branch)
+            git stash -m "REBASE==$current_branch==$today"
+        fi
+        git fetch origin "$branch"
+        git switch -c "$branch" --track "origin/$branch" -q
+        git switch - -q
+        if [[ $has_changes -eq 1 ]]; then
+            git stash apply
+        fi
+    fi
+}
+
+local_fetch_if_necessary_switch() {
+    local branch_source=$1
+    local directory=$2
+    if [[ $(local_branch_exists $branch_source) -eq 0 ]]; then
+        fetch_src_if_necessary "$branch_source" "$directory"
+        add_remote_if_does_not_exists localrepo "$local_repo_folder/$directory"
+        git fetch localrepo "$branch_source:$branch_source" -q
+    fi
+    git switch $branch_source
+}
+
+add_remote_if_does_not_exists() {
+    local remote_name=$1
+    local remote_uri=$2
+    if [[ ! $(git remote show | grep -F "$remote_name") ]]; then
+        git remote add "$remote_name" "$remote_uri"
+    fi
 }

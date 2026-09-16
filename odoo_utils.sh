@@ -14,7 +14,7 @@ cdroot() {
     cd $root_rel_path
 }
 
-cdodoo() {
+cdcommunity() {
     local root_rel_path=$(get_root_relative_path)
     if [[ $root_rel_path == '' ]]; then
         exit 1
