@@ -2,6 +2,7 @@
 
 GIT_UTILS_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${GIT_UTILS_SCRIPT_DIR}/number_utils.sh"
+source "${GIT_UTILS_SCRIPT_DIR}/config.sh"
 
 origin_version_prefix=[0-9]{2}\.0
 saas_version_prefix=saas-[0-9]{2}\.[0-9]
@@ -34,62 +35,111 @@ is_source_branch() {
 get_active_branch() {
     local community=$1
     local enterprise=$2
-    if [[ $community == $enterprise ]]; then
-        echo $community
+    local upgrade=$3
+    local stable=''
+    local custom=''
+    if [[ $(is_source_branch $community) -eq 1 ]]; then
+        stable=$community
+    else
+        custom=$community
+    fi
+
+    if [[ $(is_source_branch $enterprise) -eq 1 ]]; then
+        if [[ $stable == '' ]]; then
+            stable=$enterprise
+        else
+            if [[ $stable != $enterprise ]]; then
+                echo "Enterprise branch doesn't match community branch! Please fix that manually!" 1>&2
+                return
+            fi
+        fi
+    else
+        if [[ $custom == '' ]]; then
+            custom=$enterprise
+        else
+            if [[ $custom != $enterprise ]]; then
+                echo "Enterprise branch doesn't match community branch! Please fix that manually!" 1>&2
+                return
+            fi
+        fi
+    fi
+
+    if [[ $upgrade != '' && $upgrade != 'master' ]]; then
+        if [[ $custom == '' ]]; then
+            custom=$upgrade
+        elif [[ $custom != $upgrade ]]; then
+            echo "Upgrade branch doesn't match the other branches! Please fix that manually!" 1>&2
+            return
+        fi
+    fi
+
+    if [[ $custom != '' ]]; then
+        echo $custom
         return
     fi
-    local is_community_src=$(is_source_branch $community)
-    local is_enterprise_src=$(is_source_branch $enterprise)
-    if [[ ($is_community_src -eq 1 && $is_enterprise_src -eq 1) ]]; then
-        echo "Folder activ branches ($1 and $2) are inconsistent! Please fix that manually!" 1>&2
-        return
-    elif [[ ($is_community_src -eq 0 && $is_enterprise_src -eq 0) ]]; then
-        echo "2 Folder activ branches ($1 and $2) are inconsistent! Please fix that manually!" 1>&2
-        return
-    elif [[ $is_community_src -eq 0 ]]; then
-        echo $community
+    echo $stable
+}
+
+get_ws_custom_branches() {
+    local -n ws_availabe_branches=$1
+    local root_rel_path=$(get_root_relative_path)
+    if [[ $root_rel_path == '' ]]; then
+        ws_availabe_branches[error]=1
         return
     fi
-    echo $enterprise
+    cd "$root_rel_path/$community_folder"
+    for branch in $(git branch | sed 's/* /-/g'); do
+        if [[ $branch =~ ^-.*$ ]]; then
+            ws_availabe_branches[community]=${branch:1}
+            continue
+        fi
+
+        if [[ $(is_source_branch "$branch") -eq 0 ]]; then
+            ws_availabe_branches[$branch]=true
+        fi
+    done
+    cd "../$enterprise_folder"
+    for branch in $(git branch | sed 's/* /-/g'); do
+        if [[ $branch =~ ^-.*$ ]]; then
+            ws_availabe_branches[enterprise]=${branch:1}
+            continue
+        fi
+
+        if [[ $(is_source_branch "$branch") -eq 0 ]]; then
+            ws_availabe_branches[$branch]=true
+        fi
+    done
+
+    if [[ -d "../$upgrade_folder" ]]; then
+        cd "../$upgrade_folder"
+        for branch in $(git branch | sed 's/* /-/g'); do
+            if [[ "$branch" =~ ^-.*$ ]]; then
+                ws_availabe_branches[upgrade]=${branch:1}
+                continue
+            fi
+
+            if [[ "$branch" != 'master' ]]; then
+                ws_availabe_branches[$branch]=true
+            fi
+        done
+    fi
+    ws_availabe_branches[error]=0
 }
 
 select_branch() {
-    local root_rel_path=$(get_root_relative_path)
-    if [[ $root_rel_path == '' ]]; then
-        exit 1
-    fi
-    cd $root_rel_path/odoo
-
     declare -A availabe_branches
-    local community_branch=""
-    local enterprise_branch=""
-    for branch in $(git branch | sed 's/* /-/g'); do
-        if [[ $branch =~ ^-.*$ ]]; then
-            community_branch=${branch:1}
-            continue
-        fi
-
-        if [[ $(is_source_branch $branch) -eq 0 ]]; then
-            availabe_branches[$branch]=true
-        fi
-    done
-    cd ../enterprise
-    for branch in $(git branch | sed 's/* /-/g'); do
-        if [[ $branch =~ ^-.*$ ]]; then
-            enterprise_branch=${branch:1}
-            continue
-        fi
-
-        if [[ $(is_source_branch $branch) -eq 0 ]]; then
-            availabe_branches[$branch]=true
-        fi
-    done
-
-    local active_branch=$(get_active_branch $community_branch $enterprise_branch)
+    get_ws_custom_branches availabe_branches
+    if [[ ${availabe_branches[error]} -eq 1 ]]; then
+        return
+    fi
+    local community_branch=${availabe_branches['community']}
+    local enterprise_branch=${availabe_branches['enterprise']}
+    local upgrade_branch=${availabe_branches['upgrade']}
+    local active_branch=$(get_active_branch "$community_branch" "$enterprise_branch" "$upgrade_branch")
     local i=1
     echo " Please pick a branch"
     for branch in ${!availabe_branches[@]}; do
-        if [[ $branch == $active_branch ]]; then
+        if [[ $branch == $active_branch || $branch == 'community' || $branch == 'enterprise' || $branch == 'upgrade' || $branch == 'error' ]]; then
             continue
         fi
         echo "    [$i] $branch"
@@ -158,8 +208,9 @@ remote_branch_exists() {
 }
 
 get_current_branch() {
-    local gs_line=$(git status | head -1)
-    echo ${gs_line##*' '}
+    # local gs_line=$(git status | head -1)
+    # echo ${gs_line##*' '}
+    git branch --show-current
 }
 
 changes_exist() {
@@ -170,22 +221,8 @@ changes_exist() {
     fi
 }
 
-fetch_if_necessary_switch() {
-    local branch=$1
-    local remote=$(get_branch_remote $branch)
-    if [[ $(local_branch_exists $branch) -eq 0 ]]; then
-        git fetch $remote $branch
-        if [[ $(get_branch_source $branch) = $branch ]]; then
-            git switch -c $branch --track "$remote/$branch"
-            return 0
-        fi
-    fi
-    git switch $branch
-}
-
 fetch_src_if_necessary() {
     local branch=$1
-    local folder=$2
     local branch_src=$(get_branch_source "$branch")
     if [[ $(local_branch_exists "$branch_src") -eq 0 ]]; then
         local has_changes=$(changes_exist)
@@ -207,7 +244,7 @@ local_fetch_if_necessary_switch() {
     local branch_source=$1
     local directory=$2
     if [[ $(local_branch_exists $branch_source) -eq 0 ]]; then
-        fetch_src_if_necessary "$branch_source" "$directory"
+        fetch_src_if_necessary "$branch_source"
         add_remote_if_does_not_exists localrepo "$local_repo_folder/$directory"
         git fetch localrepo "$branch_source:$branch_source" -q
     fi

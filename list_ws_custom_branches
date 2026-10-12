@@ -1,0 +1,28 @@
+#!/bin/bash
+
+
+set -e
+
+get_ws_act_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${get_ws_act_dir}/git_utils.sh"
+source "${get_ws_act_dir}/../display_utils.sh"
+source "${get_ws_act_dir}/odoo_utils.sh"
+source "${get_ws_act_dir}/config.sh"
+
+declare -A availabe_branches
+get_ws_custom_branches availabe_branches
+if [[ ${availabe_branches[error]} -eq 1 ]]; then
+    exit 1
+fi
+
+listing=""
+for branch in ${!availabe_branches[@]}; do
+    if [[ $branch == "community" || $branch == "enterprise" || $branch == "upgrade" || $branch == "error" ]]; then
+        continue
+    elif [[ $listing == "" ]]; then
+        listing="$branch"
+    else
+        listing="$listing,$branch"
+    fi
+done
+echo $listing
